@@ -1,6 +1,7 @@
 package co.edu.escuelaing.webframework;
 
 import java.io.IOException;
+import java.util.concurrent.TimeUnit;
 
 public final class WebFramework {
 
@@ -28,11 +29,27 @@ public final class WebFramework {
     }
 
     public static void start() throws IOException {
+        registerShutdownHook();
         server.start();
     }
 
     public static void start(int port) throws IOException {
+        registerShutdownHook();
         server.start(port);
+    }
+
+    // SIGTERM (docker stop, Ctrl+C, systemd) runs JVM shutdown hooks. The hook
+    // stops accepting connections and waits for in-flight requests before the
+    // JVM is allowed to exit.
+    private static void registerShutdownHook() {
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            server.stop();
+            try {
+                server.awaitTermination(10, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }, "graceful-shutdown"));
     }
 
     public static void stop() {

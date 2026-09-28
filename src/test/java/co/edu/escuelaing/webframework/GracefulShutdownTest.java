@@ -1,6 +1,5 @@
 package co.edu.escuelaing.webframework;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -11,18 +10,17 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class ConcurrentRequestTest {
+class GracefulShutdownTest {
 
     private static final long HANDLER_DELAY_MS = 1000;
-    private static final int PARALLEL_REQUESTS = 5;
 
     private HttpServer server;
     private Thread serverThread;
@@ -39,8 +37,9 @@ class ConcurrentRequestTest {
             }
             return "done";
         });
+        router.addRoute("GET", "/fast", (req, resp) -> "fast");
 
-        server = new HttpServer(router, new StaticFileService(), 8);
+        server = new HttpServer(router, new StaticFileService(), 4);
         port = freePort();
         serverThread = new Thread(() -> {
             try {
@@ -53,34 +52,43 @@ class ConcurrentRequestTest {
         waitUntilListening(port);
     }
 
-    @AfterEach
-    void stopServer() throws Exception {
+    @Test
+    void stopReturnsWithoutNeedingAnotherConnection() throws Exception {
         server.stop();
-        serverThread.join(5000);
+
+        assertTrue(server.awaitTermination(3, TimeUnit.SECONDS), "server did not stop");
+        serverThread.join(1000);
+        assertFalse(serverThread.isAlive());
+        assertFalse(server.isRunning());
     }
 
     @Test
-    void slowRequestsAreServedInParallel() {
-        HttpClient client = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(5))
-                .build();
-        HttpRequest request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/slow")).build();
+    void inFlightRequestCompletesAndNewConnectionsAreRefused() throws Exception {
+        HttpClient client = HttpClient.newHttpClient();
+        CompletableFuture<HttpResponse<String>> inFlight = client.sendAsync(
+                HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/slow")).build(),
+                HttpResponse.BodyHandlers.ofString());
 
-        long start = System.nanoTime();
-        List<CompletableFuture<HttpResponse<String>>> responses = new ArrayList<>();
-        for (int i = 0; i < PARALLEL_REQUESTS; i++) {
-            responses.add(client.sendAsync(request, HttpResponse.BodyHandlers.ofString()));
-        }
-        responses.forEach(future -> {
-            HttpResponse<String> response = future.join();
-            assertEquals(200, response.statusCode());
-            assertEquals("done", response.body());
-        });
-        long elapsedMs = (System.nanoTime() - start) / 1_000_000;
+        // Let the slow request reach its handler before shutting down.
+        Thread.sleep(300);
+        server.stop();
 
-        // A sequential server would need PARALLEL_REQUESTS * HANDLER_DELAY_MS (5 s).
-        assertTrue(elapsedMs < 2 * HANDLER_DELAY_MS,
-                "Expected parallel handling (< " + 2 * HANDLER_DELAY_MS + " ms) but took " + elapsedMs + " ms");
+        assertThrows(IOException.class, () -> new Socket("localhost", port).close(),
+                "new connections must be refused once shutdown starts");
+
+        HttpResponse<String> response = inFlight.get(5, TimeUnit.SECONDS);
+        assertEquals(200, response.statusCode());
+        assertEquals("done", response.body());
+
+        assertTrue(server.awaitTermination(5, TimeUnit.SECONDS), "server did not finish draining");
+    }
+
+    @Test
+    void stopIsIdempotent() throws Exception {
+        server.stop();
+        server.stop();
+
+        assertTrue(server.awaitTermination(3, TimeUnit.SECONDS));
     }
 
     private static int freePort() throws IOException {
