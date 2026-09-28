@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Maintainable Application Server</title>
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+    <header>
+        <img src="/images/logo.png" alt="Logo" class="logo">
+        <h1>Maintainable Application Server</h1>
+    </header>
+
+    <main>
+        <p>Este sitio es servido como archivo est&aacute;tico por el framework.</p>
+
+        <section class="card">
+            <h2>/hello</h2>
+            <input type="text" id="name" placeholder="Tu nombre">
+            <button onclick="greet()">Saludar</button>
+            <p id="result"></p>
+        </section>
+
+        <section class="card">
+            <h2>/pi</h2>
+            <button onclick="getPi()">Obtener &pi;</button>
+            <p id="pi-result"></p>
+        </section>
+    </main>
+
+    <script src="/app.js"></script>
+</body>
+</html>
