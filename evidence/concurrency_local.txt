@@ -1,0 +1,15 @@
+$ PORT=8095 java -jar target/webframework-jar-with-dependencies.jar
+Server listening on port 8095 with 16 worker threads
+
+$ curl "http://localhost:8095/hello?name=Ana"
+Hello Ana
+
+# 5 solicitudes a /slow?ms=2000 lanzadas en paralelo (cada una tarda 2 s)
+$ for i in 1 2 3 4 5; do curl -s "http://localhost:8095/slow?ms=2000" & done; wait
+Done after 2000 ms on pool-1-thread-3
+Done after 2000 ms on pool-1-thread-4
+Done after 2000 ms on pool-1-thread-5
+Done after 2000 ms on pool-1-thread-6
+Done after 2000 ms on pool-1-thread-7
+
+Tiempo total: 2183 ms   (un servidor secuencial necesitaría ~10000 ms)

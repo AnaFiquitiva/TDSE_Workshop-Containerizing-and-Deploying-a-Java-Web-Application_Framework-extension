@@ -8,18 +8,32 @@ import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 
 public class HttpServer {
 
     private static final int DEFAULT_PORT = 8080;
+    private static final int DEFAULT_THREADS = 16;
 
     private final Router router;
     private final StaticFileService staticFileService;
+    private final int threads;
     private volatile boolean running = false;
+    private ExecutorService workers;
 
     public HttpServer(Router router, StaticFileService staticFileService) {
+        this(router, staticFileService, DEFAULT_THREADS);
+    }
+
+    public HttpServer(Router router, StaticFileService staticFileService, int threads) {
+        if (threads < 1) {
+            throw new IllegalArgumentException("Thread pool size must be at least 1, got " + threads);
+        }
         this.router = router;
         this.staticFileService = staticFileService;
+        this.threads = threads;
     }
 
     public void start() throws IOException {
@@ -28,19 +42,33 @@ public class HttpServer {
 
     public void start(int port) throws IOException {
         running = true;
+        workers = Executors.newFixedThreadPool(threads);
 
         try (ServerSocket serverSocket = new ServerSocket()) {
             serverSocket.bind(new InetSocketAddress(port));
-            System.out.println("Server listening on port " + port);
+            System.out.println("Server listening on port " + port + " with " + threads + " worker threads");
 
             while (running) {
-                try (Socket clientSocket = serverSocket.accept()) {
-                    handleConnection(clientSocket);
+                Socket clientSocket;
+                try {
+                    clientSocket = serverSocket.accept();
                 } catch (IOException e) {
-                    // A single bad connection must not bring the server down.
-                    System.err.println("Error handling connection: " + e.getMessage());
+                    // A single failed accept must not bring the server down.
+                    System.err.println("Error accepting connection: " + e.getMessage());
+                    continue;
+                }
+
+                // The accept loop only hands the connection off; a worker thread
+                // parses, dispatches and answers it, so a slow handler no longer
+                // blocks every other client.
+                try {
+                    workers.submit(() -> serve(clientSocket));
+                } catch (RejectedExecutionException e) {
+                    closeQuietly(clientSocket);
                 }
             }
+        } finally {
+            workers.shutdown();
         }
 
         System.out.println("Server stopped gracefully.");
@@ -48,6 +76,22 @@ public class HttpServer {
 
     public void stop() {
         running = false;
+    }
+
+    private void serve(Socket clientSocket) {
+        try (clientSocket) {
+            handleConnection(clientSocket);
+        } catch (IOException e) {
+            System.err.println("Error handling connection: " + e.getMessage());
+        }
+    }
+
+    private void closeQuietly(Socket socket) {
+        try {
+            socket.close();
+        } catch (IOException ignored) {
+            // Nothing useful to do if the socket cannot be closed.
+        }
     }
 
     private void handleConnection(Socket clientSocket) {

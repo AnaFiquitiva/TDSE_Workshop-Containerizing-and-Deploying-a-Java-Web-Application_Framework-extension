@@ -6,9 +6,17 @@ public final class WebFramework {
 
     private static final Router router = new Router();
     private static final StaticFileService staticFileService = new StaticFileService();
-    private static final HttpServer server = new HttpServer(router, staticFileService);
+    private static final HttpServer server = new HttpServer(router, staticFileService, threadsFromEnv());
 
     private WebFramework() {
+    }
+
+    private static int threadsFromEnv() {
+        String value = System.getenv("THREADS");
+        if (value == null || value.isBlank()) {
+            return 16;
+        }
+        return Integer.parseInt(value.trim());
     }
 
     public static void staticfiles(String root) {
