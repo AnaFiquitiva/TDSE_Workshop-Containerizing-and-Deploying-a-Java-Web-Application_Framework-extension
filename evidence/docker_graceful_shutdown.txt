@@ -1,0 +1,17 @@
+$ curl "http://localhost:34000/slow?ms=4000" &   # solicitud de 4 s en curso
+$ docker stop fw-1                               # 0.7 s después: Docker envía SIGTERM al PID 1 (java)
+fw-1   (docker stop tardó 3789 ms: esperó a que terminara la solicitud, sin llegar al SIGKILL de los 10 s)
+
+# Respuesta de la solicitud que estaba en curso:
+HTTP 200 -> Done after 4000 ms on pool-1-thread-8
+
+$ docker logs fw-1
+Server listening on port 8080 with 16 worker threads
+Shutdown requested: no longer accepting new connections.
+All in-flight requests completed.
+Server stopped gracefully.
+
+$ docker inspect fw-1 --format "{{.State.Status}} exit={{.State.ExitCode}}"
+exited exit=143
+# 143 = 128 + 15 (SIGTERM): la JVM terminó por la señal después de ejecutar su shutdown hook.
+# Si el apagado hubiera superado el periodo de gracia, Docker habría enviado SIGKILL y el código sería 137.

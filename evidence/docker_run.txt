@@ -1,0 +1,31 @@
+$ docker build -t anafiquitivapoveda/custom-webframework:1.0 .
+$ docker images anafiquitivapoveda/custom-webframework
+REPOSITORY                               TAG       IMAGE ID       CREATED          SIZE
+anafiquitivapoveda/custom-webframework   1.0       af41ba2ec0d4   23 seconds ago   733MB
+anafiquitivapoveda/custom-webframework   latest    af41ba2ec0d4   23 seconds ago   733MB
+
+$ docker run -d --name fw-1 -p 34000:8080 anafiquitivapoveda/custom-webframework:1.0                          # PORT por defecto (8080)
+$ docker run -d --name fw-2 -e PORT=9000 -e THREADS=4 -p 34001:9000 anafiquitivapoveda/custom-webframework:1.0  # PORT y THREADS por variable de entorno
+
+$ docker ps
+CONTAINER ID   IMAGE                                        STATUS         PORTS                                           NAMES
+0e84e8ce213e   anafiquitivapoveda/custom-webframework:1.0   Up 1 second    0.0.0.0:34001->9000/tcp, [::]:34001->9000/tcp   fw-2
+51d0e2887ee8   anafiquitivapoveda/custom-webframework:1.0   Up 2 seconds   0.0.0.0:34000->8080/tcp, [::]:34000->8080/tcp   fw-1
+
+$ docker logs fw-1
+Server listening on port 8080 with 16 worker threads
+$ docker logs fw-2
+Server listening on port 9000 with 4 worker threads
+
+$ curl "http://localhost:34000/hello?name=Docker"
+Hello Docker
+$ curl "http://localhost:34001/hello?name=Docker2"
+Hello Docker2
+
+# Concurrencia dentro del contenedor: 5 solicitudes /slow?ms=2000 en paralelo
+Done after 2000 ms on pool-1-thread-3
+Done after 2000 ms on pool-1-thread-4
+Done after 2000 ms on pool-1-thread-5
+Done after 2000 ms on pool-1-thread-6
+Done after 2000 ms on pool-1-thread-7
+Tiempo total: 2174 ms   (secuencial: ~10000 ms)

@@ -5,11 +5,29 @@ import java.util.concurrent.TimeUnit;
 
 public final class WebFramework {
 
+    private static final int DEFAULT_PORT = 8080;
+
     private static final Router router = new Router();
     private static final StaticFileService staticFileService = new StaticFileService();
     private static final HttpServer server = new HttpServer(router, staticFileService, threadsFromEnv());
 
     private WebFramework() {
+    }
+
+    static int resolvePort(String value) {
+        if (value == null || value.isBlank()) {
+            return DEFAULT_PORT;
+        }
+        int port;
+        try {
+            port = Integer.parseInt(value.trim());
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("PORT must be a number, got '" + value + "'");
+        }
+        if (port < 1 || port > 65535) {
+            throw new IllegalArgumentException("PORT must be between 1 and 65535, got " + port);
+        }
+        return port;
     }
 
     private static int threadsFromEnv() {
@@ -28,9 +46,12 @@ public final class WebFramework {
         router.addRoute("GET", path, handler);
     }
 
+    /**
+     * Starts the server on the port given by the PORT environment variable,
+     * or on 8080 when it is not set.
+     */
     public static void start() throws IOException {
-        registerShutdownHook();
-        server.start();
+        start(resolvePort(System.getenv("PORT")));
     }
 
     public static void start(int port) throws IOException {

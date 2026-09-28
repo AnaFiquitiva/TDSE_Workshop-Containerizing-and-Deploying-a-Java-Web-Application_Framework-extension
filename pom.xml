@@ -13,8 +13,7 @@
     <description>Lightweight Java web framework with static file support and lambda-based GET services.</description>
 
     <properties>
-        <maven.compiler.source>17</maven.compiler.source>
-        <maven.compiler.target>17</maven.compiler.target>
+        <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <mainClass>co.edu.escuelaing.app.Application</mainClass>
         <junit.version>5.10.2</junit.version>

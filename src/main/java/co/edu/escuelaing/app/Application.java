@@ -43,12 +43,8 @@ public class Application {
             });
         }
 
-        String portValue = System.getenv("PORT");
-        int port = (portValue == null || portValue.isBlank())
-                ? 8080
-                : Integer.parseInt(portValue);
-
-        start(port);
+        // The framework reads the listening port from the PORT environment variable.
+        start();
     }
 
     private static long parseDelay(String value) {
