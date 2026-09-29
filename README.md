@@ -382,7 +382,16 @@ Resultado: `Tests run: 18, Failures: 0, Errors: 0, Skipped: 0`.
 
 ## Video de demostración
 
-📹 **Video:** _[agregar aquí el enlace al video antes de la entrega]_
+📹 **Video:** https://youtu.be/rp4x85QmN98
+
+El video muestra:
+1. El historial de commits de la extensión y la ejecución de las pruebas automatizadas.
+2. La imagen publicada en Docker Hub y dos contenedores de la misma imagen con `PORT` y `THREADS` distintos.
+3. La concurrencia: 5 solicitudes lentas en paralelo atendidas en ~2 s por hilos distintos.
+4. El apagado ordenado con `docker stop` y una solicitud en curso.
+5. El despliegue en AWS EC2: instancia en ejecución, contenedor en la VM y endpoint público respondiendo.
+
+Video del Repo 1 (taller con Spring Boot): https://youtu.be/k8HInEJ6VzE
 
 ## Índice de evidencias
 
