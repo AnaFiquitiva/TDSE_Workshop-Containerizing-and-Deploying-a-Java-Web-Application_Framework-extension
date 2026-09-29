@@ -9,7 +9,7 @@ Este repositorio contiene la extensión del framework web propio desarrollado en
 - ✅ **Apagado ordenado** (graceful shutdown), también ante `SIGTERM` de `docker stop`.
 - ✅ **Puerto de escucha** leído de la variable de entorno `PORT`.
 - ✅ Ejecución dentro de un **contenedor Docker**.
-- ⏳ Despliegue en **AWS EC2** (ver [Despliegue en AWS EC2](#despliegue-en-aws-ec2)).
+- ✅ Despliegue en **AWS EC2** (ver [Despliegue en AWS EC2](#despliegue-en-aws-ec2)).
 
 Repositorio compañero (taller con Spring Boot): https://github.com/AnaFiquitiva/TDSE_Workshop-Containerizing-and-Deploying-a-Java-Web-Application_SpringBoot
 
@@ -269,7 +269,7 @@ exited exit=143   # 128 + SIGTERM: salida normal tras el shutdown hook (SIGKILL 
 
 ## Despliegue en AWS EC2
 
-Instancia `t3.micro` con Amazon Linux 2023 en `us-east-1`. Security group con entrada en TCP 22 (SSH) y TCP 8080 (aplicación).
+Instancia `t3.micro` (`i-0327920d5ca6669ff`, `custom-webframework`) con Amazon Linux 2023 en `us-east-1`. Security group con entrada en TCP 22 (SSH) y TCP 8080 (aplicación).
 
 ```bash
 sudo yum update -y
@@ -287,8 +287,72 @@ docker run -d \
   anafiquitivapoveda/custom-webframework:1.0
 ```
 
-<!-- EC2-EVIDENCE: completar con la salida real del despliegue -->
-_Evidencia pendiente: se completa con la salida de `docker ps`, `docker logs` y las capturas de la consola y del navegador._
+**URL pública de despliegue:** http://ec2-98-84-173-108.compute-1.amazonaws.com:8080/hello?name=AWS
+*(verificada el 28/09/2026; la instancia se apaga después de la revisión para evitar cargos, así que puede no estar disponible — ver la evidencia a continuación)*
+
+| Endpoint público | Respuesta |
+|---|---|
+| http://ec2-98-84-173-108.compute-1.amazonaws.com:8080/ | Página estática `index.html` |
+| http://ec2-98-84-173-108.compute-1.amazonaws.com:8080/hello?name=AWS | `Hello AWS` |
+| http://ec2-98-84-173-108.compute-1.amazonaws.com:8080/pi | `3.141592653589793` |
+
+**Evidencia dentro de la instancia** — [`evidence/ec2_deployment.txt`](evidence/ec2_deployment.txt): `pull` con el mismo digest de la imagen construida localmente (`sha256:af41ba2ec0d4…`), contenedor en ejecución, concurrencia y apagado ordenado **en EC2**:
+
+```
+$ docker ps
+CONTAINER ID   IMAGE                                        COMMAND               STATUS          PORTS                    NAMES
+ccdb7cb3bacf   anafiquitivapoveda/custom-webframework:1.0   "java -jar app.jar"   Up 17 seconds   0.0.0.0:8080->8080/tcp   custom-webframework
+
+$ docker logs custom-webframework
+Server listening on port 8080 with 16 worker threads
+
+$ curl "http://localhost:8080/hello?name=AWS"
+Hello AWS
+
+# 5 solicitudes /slow?ms=2000 en paralelo
+Done after 2000 ms on pool-1-thread-5
+Done after 2000 ms on pool-1-thread-2
+Done after 2000 ms on pool-1-thread-1
+Done after 2000 ms on pool-1-thread-4
+Done after 2000 ms on pool-1-thread-3
+real    0m2.050s
+
+# docker stop con una solicitud de 4 s en curso
+Done after 4000 ms on pool-1-thread-2
+real    0m3.313s
+
+$ docker logs custom-webframework
+Server listening on port 8080 with 16 worker threads
+Shutdown requested: no longer accepting new connections.
+All in-flight requests completed.
+Server stopped gracefully.
+```
+
+**Evidencia desde un cliente externo** — [`evidence/ec2_public_access.txt`](evidence/ec2_public_access.txt): solicitudes desde otra máquina a la URL pública, incluida la concurrencia a través de internet:
+
+```
+$ curl "http://ec2-98-84-173-108.compute-1.amazonaws.com:8080/hello?name=Ana%20Gabriela%20Fiquitiva"
+Hello Ana Gabriela Fiquitiva
+
+$ curl "http://ec2-98-84-173-108.compute-1.amazonaws.com:8080/pi"
+3.141592653589793
+
+$ curl -w "%{http_code} %{content_type}" "http://ec2-98-84-173-108.compute-1.amazonaws.com:8080/"
+200 text/html; charset=utf-8
+
+# 5 solicitudes /slow?ms=2000 en paralelo desde internet
+Tiempo total: 2361 ms   (incluye la latencia de red; secuencial: >10000 ms)
+```
+
+Consola de EC2 con la instancia en ejecución:
+
+![Consola de AWS EC2 con la instancia en ejecución](evidence/ec2_instance_running_console.png)
+
+Endpoint público desde el navegador:
+
+![Endpoint público en EC2 respondiendo en el navegador](evidence/ec2_browser_screenshot.png)
+
+> **Nota sobre el security group:** al principio las solicitudes externas al puerto 8080 se agotaban por tiempo, aunque dentro de la instancia `curl localhost:8080` respondía. Faltaba la regla de entrada TCP 8080; al agregarla, el endpoint quedó accesible. Esto muestra que el security group es la primera barrera de red del modelo: filtra el tráfico antes de que llegue a Docker o a la aplicación. Por las restricciones de la red de la universidad, las reglas de SSH (22) y de la aplicación (8080) se abrieron a `0.0.0.0/0` en lugar de limitarlas a una IP específica, como recomienda el taller.
 
 ## Evidencia del progreso (commits)
 
@@ -328,3 +392,7 @@ Resultado: `Tests run: 18, Failures: 0, Errors: 0, Skipped: 0`.
 | `graceful_shutdown_local.txt` | Ejecución local: `/shutdown` con una solicitud en curso; conexiones nuevas rechazadas. |
 | `docker_run.txt` | Imagen construida, dos contenedores con `PORT` distinto, respuestas y concurrencia en Docker. |
 | `docker_graceful_shutdown.txt` | `docker stop` (SIGTERM) con una solicitud en curso: drenado y logs del apagado. |
+| `ec2_deployment.txt` | Dentro de EC2: `pull`, `run`, `docker ps`, `docker logs`, concurrencia y `docker stop` con drenado. |
+| `ec2_public_access.txt` | Desde un cliente externo: `/hello`, `/pi`, `/` y concurrencia contra la URL pública. |
+| `ec2_instance_running_console.png` | Consola de AWS con la instancia en estado `Running`. |
+| `ec2_browser_screenshot.png` | Navegador mostrando el endpoint público. |

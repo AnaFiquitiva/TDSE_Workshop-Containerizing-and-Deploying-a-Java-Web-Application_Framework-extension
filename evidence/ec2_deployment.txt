@@ -1,0 +1,61 @@
+# AWS EC2 — Amazon Linux 2023, t3.micro, us-east-1 (conexión por EC2 Instance Connect)
+
+[ec2-user@ip-172-31-31-128 ~]$ docker pull anafiquitivapoveda/custom-webframework:1.0
+1.0: Pulling from anafiquitivapoveda/custom-webframework
+0f0cc63a5845: Pull complete
+0243ab3bc16e: Pull complete
+b7801cb8c054: Pull complete
+ad8989cfa233: Pull complete
+Digest: sha256:af41ba2ec0d4904ff99a04ad8102c1cb57655aca86320bcf6d12bd2fa2accd28
+Status: Downloaded newer image for anafiquitivapoveda/custom-webframework:1.0
+docker.io/anafiquitivapoveda/custom-webframework:1.0
+
+[ec2-user@ip-172-31-31-128 ~]$ docker run -d \
+  --name custom-webframework \
+  --restart unless-stopped \
+  -e PORT=8080 \
+  -p 8080:8080 \
+  anafiquitivapoveda/custom-webframework:1.0
+ccdb7cb3bacf09e4e9b915c9a4930475c402b23c129670555d59ab1bc20e5d28
+
+[ec2-user@ip-172-31-31-128 ~]$ docker ps
+CONTAINER ID   IMAGE                                        COMMAND               CREATED          STATUS          PORTS                                       NAMES
+ccdb7cb3bacf   anafiquitivapoveda/custom-webframework:1.0   "java -jar app.jar"   19 seconds ago   Up 17 seconds   0.0.0.0:8080->8080/tcp, :::8080->8080/tcp   custom-webframework
+
+[ec2-user@ip-172-31-31-128 ~]$ docker logs custom-webframework
+Server listening on port 8080 with 16 worker threads
+
+[ec2-user@ip-172-31-31-128 ~]$ curl "http://localhost:8080/hello?name=AWS"
+Hello AWS
+
+# Concurrencia en EC2: 5 solicitudes /slow?ms=2000 en paralelo (secuencial: ~10 s)
+[ec2-user@ip-172-31-31-128 ~]$ time (for i in 1 2 3 4 5; do curl -s "http://localhost:8080/slow?ms=2000" & done; wait); echo
+Done after 2000 ms on pool-1-thread-5
+Done after 2000 ms on pool-1-thread-2
+Done after 2000 ms on pool-1-thread-1
+Done after 2000 ms on pool-1-thread-4
+Done after 2000 ms on pool-1-thread-3
+
+real    0m2.050s
+user    0m0.034s
+sys     0m0.008s
+
+# Apagado ordenado en EC2: docker stop (SIGTERM) con una solicitud de 4 s en curso
+[ec2-user@ip-172-31-31-128 ~]$ curl -s "http://localhost:8080/slow?ms=4000" & sleep 1; time docker stop custom-webframework; wait; echo
+[1] 29342
+Done after 4000 ms on pool-1-thread-2
+custom-webframework
+[1]+  Done                    curl -s "http://localhost:8080/slow?ms=4000"
+
+real    0m3.313s
+user    0m0.006s
+sys     0m0.018s
+
+[ec2-user@ip-172-31-31-128 ~]$ docker logs custom-webframework
+Server listening on port 8080 with 16 worker threads
+Shutdown requested: no longer accepting new connections.
+All in-flight requests completed.
+Server stopped gracefully.
+
+[ec2-user@ip-172-31-31-128 ~]$ docker start custom-webframework
+custom-webframework

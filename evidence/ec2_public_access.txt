@@ -1,0 +1,18 @@
+# Verificación desde un cliente externo (máquina local, Windows) contra la URL pública de EC2 — 2026-09-28 19:37
+
+$ curl "http://ec2-98-84-173-108.compute-1.amazonaws.com:8080/hello?name=Ana%20Gabriela%20Fiquitiva"
+Hello Ana Gabriela Fiquitiva
+
+$ curl "http://ec2-98-84-173-108.compute-1.amazonaws.com:8080/pi"
+3.141592653589793
+
+$ curl -s -o /dev/null -w "%{http_code} %{content_type}" "http://ec2-98-84-173-108.compute-1.amazonaws.com:8080/"   # página estática
+200 text/html; charset=utf-8
+
+# Concurrencia a través de internet: 5 solicitudes /slow?ms=2000 en paralelo
+Done after 2000 ms on pool-1-thread-12
+Done after 2000 ms on pool-1-thread-13
+Done after 2000 ms on pool-1-thread-14
+Done after 2000 ms on pool-1-thread-15
+Done after 2000 ms on pool-1-thread-16
+Tiempo total: 2361 ms   (incluye la latencia de red; secuencial: >10000 ms)
